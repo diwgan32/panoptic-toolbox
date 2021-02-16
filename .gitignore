@@ -1,0 +1,7 @@
+env/
+*.env*
+*.npy
+171204_*
+.DS_Store
+*__pycache__*
+

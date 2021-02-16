@@ -9,7 +9,7 @@ import panutils
 
 # Setup paths
 data_path = '../'
-seq_name = '171204_pose1_sample'
+seq_name = '171204_pose1'
 
 hd_skel_json_path = data_path+seq_name+'/hdPose3d_stage1_coco19/'
 hd_face_json_path = data_path+seq_name+'/hdFace3d/'

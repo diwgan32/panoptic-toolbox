@@ -6,7 +6,7 @@ plt.rcParams['image.interpolation'] = 'nearest'
 
 # Setup paths
 data_path = '../'
-seq_name = '171204_pose1_sample'
+seq_name = '171204_pose1'
 
 hd_skel_json_path = data_path+seq_name+'/hdPose3d_stage1_coco19/'
 hd_face_json_path = data_path+seq_name+'/hdFace3d/'
@@ -23,7 +23,7 @@ with open(data_path+seq_name+'/calibration_{0}.json'.format(seq_name)) as cfile:
 cameras = {(cam['panel'],cam['node']):cam for cam in calib['cameras']}
 
 # Convert data into numpy arrays for convenience
-for k,cam in cameras.iteritems():    
+for k,cam in cameras.items():    
     cam['K'] = np.matrix(cam['K'])
     cam['distCoef'] = np.array(cam['distCoef'])
     cam['R'] = np.matrix(cam['R'])
@@ -42,7 +42,7 @@ ax.view_init(elev = -90, azim=-90)
 #ax.set_xlabel('X Label')
 ax.set_ylabel('Y Label')
 #ax.set_zlabel('Z Label')
-ax.axis('equal')
+ax.axis('auto')
 
 # Draw all cameras in black
 # for k,cam in cameras.iteritems():
@@ -57,7 +57,7 @@ for cam in hd_cameras:
 
 
 # Select HD Image index
-hd_idx = 400
+hd_idx = 118
 
 
 '''
@@ -73,7 +73,7 @@ try:
         bframe = json.load(dfile)
 
     # Bodies
-    for ids in xrange(len(bframe['bodies'])):
+    for ids in range(len(bframe['bodies'])):
         body = bframe['bodies'][ids]
         skel = np.array(body['joints19']).reshape((-1,4)).transpose()
 
