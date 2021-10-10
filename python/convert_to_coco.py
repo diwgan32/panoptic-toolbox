@@ -5,6 +5,7 @@ import cv2
 import argparse
 import os
 import random
+import panutils
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset_path', type=str, default='/home/ubuntu/RawDatasets/panoptic/',
@@ -90,14 +91,20 @@ def process_helper(sequence):
                 skel = np.array(body['joints19']).reshape((-1,4)).transpose()
 
                 joint_world = skel[0:3]
+                valid = skel[3,:]>0.1
+
                 joints_cam = (np.dot(cam['R'], joint_world) + cam['t']).T
-                joints_img = panutils.projectPoints(joints_cam,
-                      cam['K'], np.eye(3), np.zeros(3), 
-                      cam['distCoef'])
+                joints_img = panutils.projectPoints(joints_cam.T,
+                      cam['K'], np.eye(3), np.zeros((3, 19)), 
+                      cam['distCoef']).T
+                
+                valid = np.logical_and(valid, np.logical_not(np.logical_or(joints_img[:, 0] > frame.shape[1], joints_img[:, 1] > frame.shape[0])))
+                joints_img = (joints_img.T * valid).T
+
+                if (np.all(joints_img == np.zeros((19, 3)))):
+                    print("Person out of frame")
                 frame = vis_keypoints(frame, joints_img)
             
-            cv2.imwrite(f"{random.randint(1, 100)}.jpg", frame)
-            input("? ")
             hd_idx += 1
 
 def process(sequences):
