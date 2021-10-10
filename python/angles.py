@@ -55,17 +55,50 @@ def estimate_orientation(joints):
 #             Assumes the given joint information is 3D
 # Returns:
 #   - angle: The actual neck angle. Returns none if nothing is found
-def _get_neck_angle_3d(joints):
+def _get_neck_angle_3d(joints, ax=None):
     if (joints == {}):
         return np.nan
-    if (not test_validity([joints["REAR"], joints["LEAR"], joints["RHIP"], joints["LHIP"], joints["RSHOULDER"], joints["LSHOULDER"]])):
+    if (not test_validity([
+        joints["REYE"],
+        joints["LEYE"],
+        joints["RHIP"],
+        joints["LHIP"],
+        joints["RSHOULDER"],
+        joints["LSHOULDER"]
+        ])):
         return np.nan
-    head = (joints["REAR"] + joints["LEAR"])/2.0
+    head = (joints["REYE"] + joints["LEYE"]) / 2.0
     pelvis = (joints["RHIP"] + joints["LHIP"]) / 2.0
     neck = (joints["RSHOULDER"] + joints["LSHOULDER"]) / 2.0
     chest_vec = _normalize(pelvis - neck)
     head_vec = _normalize(head - neck)
     angle = np.arccos(np.dot(head_vec, chest_vec)) * 180.0 / np.pi
+    if (not(ax is None)):
+        p = joints["NECK"]
+
+        ax.quiver(
+            p[0],
+            p[1],
+            p[2],
+            head_vec[0],
+            head_vec[1],
+            head_vec[2],
+            arrow_length_ratio=.01,
+            color='b'
+        )
+
+        ax.quiver(
+            p[0],
+            p[1],
+            p[2],
+            chest_vec[0],
+            chest_vec[1],
+            chest_vec[2],
+            arrow_length_ratio=.01,
+            color='b'
+        )
+
+
     return 180 - (angle + NECK_COMPENSATION_FACTOR_3D)
 
 
@@ -129,7 +162,7 @@ def get_neck_twist_angle(joints):
         return np.nan
     ear_vector = _normalize(joints["LEAR"] - joints["REAR"])
     shoulder_vector = _normalize(joints["LSHOULDER"] - joints["RSHOULDER"])
-    return np.arcsin(np.linalg.norm(np.cross(ear_vector, shoulder_vector))) * 180.0 / np.pi
+    return np.arccos(np.dot(ear_vector, shoulder_vector)) * 180.0 / np.pi
 
 def _getChestPlaneHelper(shoulder_left, shoulder_right, hip_left, hip_right):
     if (not test_validity([shoulder_left, shoulder_right, hip_left, hip_right])):
@@ -150,22 +183,73 @@ def _getChestPlaneHelper(shoulder_left, shoulder_right, hip_left, hip_right):
 # Returns:
 #   - angle: An estimate of how side bent the neck is in degrees
 def get_neck_lateral_angle(joints, ax=None):
+    """
+    Input:
+      - joints: 3D joints
+      - side: either "L" or "R" depending on the side
+      - ax: A reference to a matplotlib 3D plot that's used for debug purposes
+    Output:
+      - angle: Returns the lateral angle of the arms
+    """
     if (joints == {}):
         return np.nan
-    head = joints["HEAD"]
-    shoulder_left = joints["LSHOULDER"]
-    shoulder_right = joints["RSHOULDER"]
-    hip_left = joints["LHIP"]
-    hip_right = joints["RHIP"]
-    if (not test_validity([head, shoulder_left, shoulder_right, hip_left, hip_right])):
+    if (not test_validity([
+            joints["LSHOULDER"],
+            joints["RSHOULDER"],
+            joints["RHIP"],
+            joints["LHIP"],
+            joints["REYE"],
+            joints["LEYE"]
+        ])):
         return np.nan
-    chest_plane_normal = _getChestPlaneHelper(shoulder_left, shoulder_right, hip_left, hip_right)
-    neck = (shoulder_right + shoulder_left) / 2.0
-    head_vec = _normalize(head - neck)
-    head_vec = head_vec - np.dot(head_vec, chest_plane_normal) * chest_plane_normal
-    pelvis = (hip_left + hip_right) / 2.0
-    body_vec = _normalize(shoulder_right - shoulder_left)
-    return np.arccos(np.dot(body_vec, head_vec)) * 180.0 / np.pi
+    hip_right = joints["RHIP"]
+    hip_left = joints["LHIP"]
+    thorax = (joints["LSHOULDER"] + joints["RSHOULDER"])/2
+    head =  (joints["REYE"] + joints["LEYE"])/2.0
+   
+    if (not test_validity([hip_right, hip_left, thorax])):
+        return np.nan
+    hip_vector = _normalize(joints["RHIP"] - joints["LHIP"])
+    shoulder_vector = _normalize(joints["RSHOULDER"] - joints["LSHOULDER"])
+    avg_lat_vec_3d = _normalize((hip_vector + shoulder_vector)/2.0)
+
+    neck_point = (joints["RSHOULDER"] + joints["LSHOULDER"])/2.0
+    neck_vec_prenorm = head - neck_point
+    neck_vec = _normalize(head - neck_point)
+    body_vec = _normalize(joints["PELV"] - thorax)
+    x = -avg_lat_vec_3d
+    y = -body_vec
+
+    z = np.cross(x, y)
+   
+    basis = np.zeros((3, 3))
+    basis[:, 0] = x
+    basis[:, 1] = y
+    basis[:, 2] = z
+
+    neck_vec_in_basis = np.dot(basis.T, neck_vec)
+    neck_vec_in_basis_prenorm = np.dot(basis.T, neck_vec_prenorm)
+    if (not (ax is None)):
+        p =neck_point
+
+        p2 = x * 100
+        p3 = y * 100
+        p4 = z * 100
+        p5 = neck_vec_in_basis_prenorm
+        ax.quiver(p[0],
+                  p[1],
+                  p[2],
+                  p2[0],
+                  p2[1],
+                  p2[2],
+                  arrow_length_ratio=.01,
+                  color='black')
+        ax.quiver(p[0], p[1], p[2], p3[0], p3[1], p3[2], arrow_length_ratio=.01, color='green')
+        ax.quiver(p[0], p[1], p[2], p4[0], p4[1], p4[2], arrow_length_ratio=.01, color='blue')
+        #ax.quiver(p[0], p[1], p[2], p5[0], p5[1], p5[2], arrow_length_ratio=.01, color="red")
+    #raise_angle = np.arccos(np.dot(elbow_shoulder_onto_hip, body_vec)) * 180.0/np.pi
+    raise_angle = (np.arctan2(neck_vec_in_basis[0],neck_vec_in_basis[1]) * 180.0/np.pi)
+    return np.abs(raise_angle)
 
 
 # Function: get_neck_angle
@@ -288,11 +372,11 @@ def _get_trunk_angle_3D(joints):
     if (joints == {}):
         return np.nan
     if (not test_validity(
-        [joints["LANKLE"], joints["RANKLE"], joints["PELV"], joints["LHIP"], joints["RHIP"], joints["NECK"]])):
+        [joints["PELV"], joints["LHIP"], joints["RHIP"], joints["NECK"]])):
         return np.nan
     pelvis_neck_vector = _normalize(joints["NECK"] - joints["PELV"])
-    right_leg_vector = _normalize(joints["RHIP"] - joints["RANKLE"])
-    left_leg_vector = _normalize(joints["LHIP"] - joints["LANKLE"])
+    right_leg_vector = np.array([0, -1, 0])
+    left_leg_vector = np.array([0, -1, 0])
 
     left_angle = np.arccos(np.dot(pelvis_neck_vector, left_leg_vector)) * 180.0 / np.pi
     right_angle = np.arccos(np.dot(pelvis_neck_vector, right_leg_vector)) * 180.0 / np.pi
@@ -363,11 +447,11 @@ def get_trunk_twist_factor(joints, ax=None):
     shoulder_left = joints["LSHOULDER"]
     if (not test_validity([hip_right, hip_left, shoulder_right, shoulder_left])):
         return np.nan
-    hip_vector = hip_right - hip_left
-    shoulder_vector = shoulder_right - shoulder_left
+    hip_vector = _normalize(hip_right - hip_left)
+    shoulder_vector = _normalize(shoulder_right - shoulder_left)
     hip_twist = np.linalg.norm(np.cross(hip_vector, shoulder_vector))
 
-    return hip_twist
+    return np.arccos(np.dot(hip_vector, shoulder_vector)) * 180.0 / np.pi
 
 
 ##########################
@@ -454,36 +538,80 @@ def getLegAngle(single_frame_3d_joints, single_frame_2d_joints, side, frame=None
 #   - angle: Returns the planar angle of the arm (used to compute
 #            whether the arm is abducted in the RULA/REBA assessment)
 def _get_planar_arm_angle3D(joints, side, ax=None):
+    """
+    Input:
+      - joints: 3D joints
+      - side: either "L" or "R" depending on the side
+      - ax: A reference to a matplotlib 3D plot that's used for debug purposes
+    Output:
+      - angle: Returns the lateral angle of the arms
+    """
     if (joints == {}):
         return np.nan
-    hip_left = joints["LHIP"]
+    if (not test_validity([
+            joints[side+"SHOULDER"],
+            joints["LSHOULDER"],
+            joints["RSHOULDER"],
+            joints["RHIP"],
+            joints["LHIP"]
+        ])):
+        return np.nan
     hip_right = joints["RHIP"]
+    hip_left = joints["LHIP"]
     elbow = joints[side + "ELBOW"]
     shoulder = joints[side + "SHOULDER"]
-    if (not test_validity([hip_left, hip_right, elbow, shoulder])):
+    thorax = (joints["LSHOULDER"] + joints["RSHOULDER"])/2
+    if (side == "L"):
+        other_side = "R"
+    else:
+        other_side = "L"
+    if (not test_validity([hip_right, hip_left, elbow, shoulder, thorax])):
         return np.nan
-    # TODO: Need to decide whether this should be wrist or shoulder
-    elbow_shoulder = elbow - shoulder
-    hip_vector = _normalize(hip_right - hip_left)
-    hip = hip_left if side == "L" else hip_right
-    shoulder_hip_vector = _normalize(shoulder - hip)
-    chest_plane_normal = _normalize(np.cross(shoulder_hip_vector, hip_vector))
-    elbow_shoulder_proj_onto_chest = _normalize(elbow_shoulder -
-                                                np.dot(elbow_shoulder, chest_plane_normal) * chest_plane_normal)
-    angle = np.arccos(np.dot(elbow_shoulder_proj_onto_chest, -shoulder_hip_vector)) * 180.0 / np.pi
+    hip_vector = _normalize(joints[side+"HIP"] - joints[other_side+"HIP"])
+    shoulder_vector = _normalize(joints[side+"SHOULDER"] - joints[other_side+"SHOULDER"])
+
+
+    avg_lat_vec_3d = _normalize((hip_vector + shoulder_vector)/2.0)
+    body_vec = _normalize(joints["PELV"] - thorax)
+    x = body_vec
+    z = avg_lat_vec_3d
+
+    y = np.cross(z, x)
+   
+    basis = np.zeros((3, 3))
+    basis[:, 0] = x
+    basis[:, 1] = y
+    basis[:, 2] = z
+    elbow_shoulder_prenorm = elbow - shoulder
+    elbow_shoulder = _normalize(elbow - shoulder)
+
+    elbow_shoulder_in_basis = np.dot(basis.T, elbow_shoulder)
+    elbow_shoulder_in_basis_prenorm = np.dot(basis.T, elbow_shoulder_prenorm)
+    pelvis = (hip_right + hip_left) / 2.0
+    
+    
+    # chest_plane = np.cross(body_vec, hip_vector)
+    # elbow_shoulder_onto_hip = _normalize(elbow_shoulder - np.dot(elbow_shoulder, hip_vector) * chest_plane)
+
     if (not (ax is None)):
         p = joints[side + "SHOULDER"]
-        p2 = shoulder_hip_vector
+        p2 = x * 100
+        p3 = y * 100
+        p4 = z * 100
         ax.quiver(p[0],
                   p[1],
                   p[2],
-                  elbow_shoulder_proj_onto_chest[0],
-                  elbow_shoulder_proj_onto_chest[1],
-                  elbow_shoulder_proj_onto_chest[2],
+                  p2[0],
+                  p2[1],
+                  p2[2],
                   arrow_length_ratio=.01,
-                  color='g')
-        ax.quiver(p[0], p[1], p[2], p2[0], p2[1], p2[2], arrow_length_ratio=.01, color='g')
-    return angle
+                  color='black')
+        ax.quiver(p[0], p[1], p[2], p3[0], p3[1], p3[2], arrow_length_ratio=.01, color='green')
+        ax.quiver(p[0], p[1], p[2], p4[0], p4[1], p4[2], arrow_length_ratio=.01, color='blue')
+    #raise_angle = np.arccos(np.dot(elbow_shoulder_onto_hip, body_vec)) * 180.0/np.pi
+    # print(elbow_shoulder_in_basis_prenorm)
+    raise_angle = (np.arctan2(elbow_shoulder_in_basis[2],elbow_shoulder_in_basis[0]) * 180.0/np.pi)
+    return raise_angle
 
 
 # TODO: REMOVE THIS, HERE FOR DEBUG PURPOSES
@@ -558,31 +686,40 @@ def _get_lateral_arm_angle3D(joints, side, ax=None):
         other_side = "L"
     if (not test_validity([hip_right, hip_left, elbow, shoulder, thorax])):
         return np.nan
-    hip_vector = _normalize(joints[other_side+"HIP"] - joints[side+"HIP"])
-    shoulder_vector = _normalize(joints[other_side+"SHOULDER"] - joints[side+"SHOULDER"])
+    hip_vector = _normalize(joints["RHIP"] - joints["LHIP"])
+    shoulder_vector = _normalize(joints["RSHOULDER"] - joints["LSHOULDER"])
 
 
     hip_vector_2d = np.array([hip_vector[0], hip_vector[2]])
     shoulder_vector_2d = np.array([shoulder_vector[0], shoulder_vector[2]])
 
     avg_lat_vec = _normalize((hip_vector_2d + shoulder_vector_2d)/2.0)
-    avg_lat_vec_3d = np.array([avg_lat_vec[0], 0, avg_lat_vec[1]])
+    avg_lat_vec_3d = _normalize((hip_vector + shoulder_vector)/2.0)
 
     elbow_shoulder_prenorm = elbow - shoulder
     elbow_shoulder = _normalize(elbow - shoulder)
-        
-    j1 = _normalize(np.array([elbow_shoulder_prenorm[0], elbow_shoulder_prenorm[2]]))
-    j2 = -_normalize(avg_lat_vec)
 
     elbow_shoulder_onto_hip = elbow_shoulder
     elbow_shoulder_onto_hip_prenorm = elbow_shoulder - np.dot(elbow_shoulder, avg_lat_vec_3d) * avg_lat_vec_3d
     proj_norm = np.linalg.norm(elbow_shoulder_onto_hip_prenorm)
-    print(f"Proj norm: {proj_norm}")
+    #print(f"Proj norm: {proj_norm}")
     
     elbow_shoulder_onto_hip = _normalize(elbow_shoulder - np.dot(elbow_shoulder, avg_lat_vec_3d) * avg_lat_vec_3d)
     body_vec = _normalize(joints["PELV"] - thorax)
     body_vec_onto_hip = _normalize(body_vec - np.dot(body_vec, avg_lat_vec_3d) * avg_lat_vec_3d)
 
+    x = body_vec
+    z = avg_lat_vec_3d
+
+    y = np.cross(z, x)
+   
+    basis = np.zeros((3, 3))
+    basis[:, 0] = x
+    basis[:, 1] = y
+    basis[:, 2] = z
+
+    elbow_shoulder_in_basis = np.dot(basis.T, elbow_shoulder)
+    elbow_shoulder_in_basis_prenorm = np.dot(basis.T, elbow_shoulder_prenorm)
     pelvis = (hip_right + hip_left) / 2.0
     
     
@@ -591,22 +728,23 @@ def _get_lateral_arm_angle3D(joints, side, ax=None):
 
     if (not (ax is None)):
         p = joints[side + "SHOULDER"]
-        p2 = body_vec * 200
-        p3 = elbow_shoulder_onto_hip * 200
-        p4 = body_vec_onto_hip * 200
+        p2 = x * 100
+        p3 = y * 100
+        p4 = z * 100
         ax.quiver(p[0],
                   p[1],
                   p[2],
-                  p3[0],
-                  p3[1],
-                  p3[2],
+                  p2[0],
+                  p2[1],
+                  p2[2],
                   arrow_length_ratio=.01,
-                  color='g')
-        # ax.quiver(p[0], p[1], p[2], p2[0], p2[1], p2[2], arrow_length_ratio=.01, color='black')
+                  color='black')
+        ax.quiver(p[0], p[1], p[2], p3[0], p3[1], p3[2], arrow_length_ratio=.01, color='green')
         ax.quiver(p[0], p[1], p[2], p4[0], p4[1], p4[2], arrow_length_ratio=.01, color='blue')
-    raise_angle = np.arccos(np.dot(elbow_shoulder_onto_hip, body_vec)) * 180.0/np.pi
-    #return raise_angle
-    return np.arccos(np.dot(j1, j2)) * 180.0/np.pi
+    #raise_angle = np.arccos(np.dot(elbow_shoulder_onto_hip, body_vec)) * 180.0/np.pi
+    raise_angle = (np.arctan2(elbow_shoulder_in_basis[1],elbow_shoulder_in_basis[0]) * 180.0/np.pi)
+    return np.abs(raise_angle)
+    #return np.arccos(np.dot(j1, j2)) * 180.0/np.pi
 
 
 def _get_lateral_arm_angle2D(joints, side, frame=None):

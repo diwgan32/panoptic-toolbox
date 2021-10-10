@@ -2,7 +2,7 @@ import numpy as np
 
 if __name__ == "__main__":
 	ground_truth_fn = '../171204_pose1_groundtruth.npy'
-	estimate_fn = '../171204_pose1_sd_00_00_estimations.npy'
+	estimate_fn = '../12_estimations.npy'
 
 	ground_truth = np.load(ground_truth_fn)
 	estimate = np.load(estimate_fn)
