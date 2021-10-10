@@ -13,6 +13,14 @@ parser.add_argument('--dataset_path', type=str, default='/home/ubuntu/RawDataset
 
 args = parser.parse_args()
 
+def reproject_to_3d(im_coords, K, z):
+    im_coords = np.stack([im_coords[:,0], im_coords[:,1]],axis=1)
+    im_coords = np.hstack((im_coords, np.ones((im_coords.shape[0],1))))
+    projected = np.dot(np.linalg.inv(K), im_coords.T).T
+    projected[:, 0] *= z
+    projected[:, 1] *= z
+    projected[:, 2] *= z
+    return projected
 
 def vis_keypoints(frame, joints2d):
     for i in range(joints2d.shape[0]):
@@ -59,6 +67,18 @@ def process_helper(sequence):
     data_path = args.dataset_path
     hd_skel_json_path = data_path+seq_name+'/hdPose3d_stage1_coco19/hd/'
     cameras = get_camera_info(os.path.join(data_path, seq_name, f"calibration_{seq_name}.json"))
+
+    output = {
+        "images": [],
+        "annotations": [],
+        "categories": [{
+            'supercategory': 'person',
+            'id': 1,
+            'name': 'person'
+        }]
+    }
+    img_idx = 0
+    annotation_idx = 0
     for i in range(10):
         hd_vid_name = f"hd_00_{i:02d}.mp4"
         hd_vid_path = os.path.join(data_path, seq_name, "hdVideos", hd_vid_name)
@@ -87,6 +107,7 @@ def process_helper(sequence):
                 hd_idx += 1
                 continue
 
+            detected_groundtruth = []
             for body in bframe['bodies']:
                 skel = np.array(body['joints19']).reshape((-1,4)).transpose()
 
@@ -100,11 +121,45 @@ def process_helper(sequence):
                 
                 valid = np.logical_and(valid, np.logical_not(np.logical_or(joints_img[:, 0] > frame.shape[1], joints_img[:, 1] > frame.shape[0])))
                 joints_img = (joints_img.T * valid).T
-
+                
                 if (np.all(joints_img == np.zeros((19, 3)))):
                     print("Person out of frame")
-                frame = vis_keypoints(frame, joints_img)
-            
+                    continue
+                
+                # Resizing 1920p to 640p
+                joints_img *= (1.0/3.0)
+                joints_cam_new = reproject_to_3d(joints_img, cam["K"], joints_cam[:, 2])
+                print(joints_cam)
+                print(joints_cam_new)
+                print("------")
+
+                detected_groundtruth.append({
+                    "id": annotation_idx,
+                    "image_id": image_idx,
+                    "category_id": 1,
+                    "is_crowd": 0,
+                    "joint_cam": joints_cam.tolist(),
+                    "bbox": get_bbox(joints_img, frame.shape) # x, y, w, h
+                })
+                frame = vis_keypoints(cv2.resize(frame, (640, 480), joints_img))
+
+                annotation_idx += 1
+
+            if (len(detected_groundtruth) > 0):
+                cv2.imwrite(f"{random.randint(1, 1000)}.jpg", frame)
+                input("? ")
+                output["images"].append({
+                    "id": image_idx,
+                    "width": frame.shape[1],
+                    "height": frame.shape[0],
+                    "file_name": os.path.join(assembly, label, cam,  "images", basename.split(".")[0]+".jpg"),
+                    "camera_param": {
+                        "focal": [float(cam['K'][0][0]), float(cam['K'][1][1])],
+                        "princpt": [float(cam['K'][0][2]), float(cam['K'][1][2])]
+                    }
+                })
+
+            image_idx += 1
             hd_idx += 1
 
 def process(sequences):
