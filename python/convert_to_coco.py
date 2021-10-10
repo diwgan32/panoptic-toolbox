@@ -4,12 +4,36 @@ import matplotlib.pyplot as plt
 import cv2
 import argparse
 import os
+import random
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset_path', type=str, default='/home/ubuntu/RawDatasets/panoptic/',
                     help='path to the ANU IKEA assembly video dataset')
 
 args = parser.parse_args()
+
+
+def vis_keypoints(frame, joints2d):
+    for i in range(joints2d.shape[0]):
+        if (np.isnan(joints2d[i][0]) or np.isnan(joints2d[i][1])):
+            continue
+        frame = cv2.circle(frame, (int(joints2d[i][0]), int(joints2d[i][1])), 5, (0, 0, 0), 2)
+
+    return frame
+
+def project_3D_points(cam_mat, pts3D):
+    '''
+    Function for projecting 3d points to 2d
+    :param camMat: camera matrix
+    :param pts3D: 3D points
+    :return:
+    '''
+    assert pts3D.shape[-1] == 3
+    assert len(pts3D.shape) == 2
+    proj_pts = pts3D.dot(cam_mat.T)
+    proj_pts = np.stack([proj_pts[:,0]/proj_pts[:,2], proj_pts[:,1]/proj_pts[:,2]],axis=1)
+    assert len(proj_pts.shape) == 2
+    return proj_pts
 
 def get_camera_info(calibration_file):
     # Load camera calibration parameters
@@ -63,8 +87,11 @@ def process_helper(sequence):
 
                 joint_world = skel[0:3]
                 joints_cam = (np.dot(cam['R'], joint_world) + cam['t']).T
-                print(joints_cam)
-                input("? ")
+                joints_img = project_3D_points(cam['K'], joints_cam)
+                frame = vis_keypoints(frame, joints_img)
+            
+            cv2.imwrite(f"{random.randint(1, 100)}.jpg", frame)
+            input("? ")
             hd_idx += 1
 
 def process(sequences):
