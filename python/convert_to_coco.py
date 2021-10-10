@@ -17,9 +17,9 @@ def reproject_to_3d(im_coords, K, z):
     im_coords = np.stack([im_coords[:,0], im_coords[:,1]],axis=1)
     im_coords = np.hstack((im_coords, np.ones((im_coords.shape[0],1))))
     projected = np.dot(np.linalg.inv(K), im_coords.T).T
-    projected[:, 0] *= z
-    projected[:, 1] *= z
-    projected[:, 2] *= z
+    projected[:, 0] = np.multiply(projected[:, 0], z)
+    projected[:, 1] = np.multiply(projected[:, 1], z)
+    projected[:, 2] = np.multiply(projected[:, 2], z)
     return projected
 
 def vis_keypoints(frame, joints2d):
@@ -77,7 +77,7 @@ def process_helper(sequence):
             'name': 'person'
         }]
     }
-    img_idx = 0
+    image_idx = 0
     annotation_idx = 0
     for i in range(10):
         hd_vid_name = f"hd_00_{i:02d}.mp4"
