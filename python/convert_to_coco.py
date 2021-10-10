@@ -82,12 +82,18 @@ def process_helper(sequence):
             with open(skel_json_fname) as dfile:
                 bframe = json.load(dfile)
 
+            if (len(bframe["bodies"]) == 0):
+                hd_idx += 1
+                continue
+
             for body in bframe['bodies']:
                 skel = np.array(body['joints19']).reshape((-1,4)).transpose()
 
                 joint_world = skel[0:3]
                 joints_cam = (np.dot(cam['R'], joint_world) + cam['t']).T
-                joints_img = project_3D_points(cam['K'], joints_cam)
+                joints_img = panutils.projectPoints(joints_cam,
+                      cam['K'], np.eye(3), np.zeros(3), 
+                      cam['distCoef'])
                 frame = vis_keypoints(frame, joints_img)
             
             cv2.imwrite(f"{random.randint(1, 100)}.jpg", frame)
