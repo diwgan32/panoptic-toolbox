@@ -20,7 +20,7 @@ def get_camera_info(calibration_file):
     cameras = {(cam['panel'],cam['node']):cam for cam in calib['cameras']}
 
     # Convert data into numpy arrays for convenience
-    for k,cam in cameras.iteritems():    
+    for k,cam in cameras.items():    
         cam['K'] = np.matrix(cam['K'])
         cam['distCoef'] = np.array(cam['distCoef'])
         cam['R'] = np.matrix(cam['R'])
@@ -32,7 +32,7 @@ def get_camera_info(calibration_file):
 def process_helper(sequence):
     seq_name = sequence
     data_path = args.dataset_path
-    hd_skel_json_path = data_path+seq_name+'/hdPose3d_stage1_coco19/'
+    hd_skel_json_path = data_path+seq_name+'/hdPose3d_stage1_coco19/hd/'
     cameras = get_camera_info(os.path.join(data_path, seq_name, f"calibration_{seq_name}.json"))
     for i in range(10):
         hd_vid_name = f"hd_00_{i:02d}.mp4"
@@ -44,20 +44,27 @@ def process_helper(sequence):
         if (not cap.isOpened()):
             print(f"Could not open {hd_vid_path}")
         
-        
+        cam = cameras[(0, i)]       
         hd_idx = 0
         while True:
+            ret, frame = cap.read()
+            if (not ret):
+                break
+ 
             skel_json_fname = hd_skel_json_path+'body3DScene_{0:08d}.json'.format(hd_idx)
+            if (not os.path.exists(skel_json_fname)):
+                hd_idx += 1
+                continue
             with open(skel_json_fname) as dfile:
                 bframe = json.load(dfile)
 
             for body in bframe['bodies']:
                 skel = np.array(body['joints19']).reshape((-1,4)).transpose()
 
-            joint_world = skel[0:3]
-            joints_cam = (np.dot(cam['R'], joint_world.T) + cam['t']).T
-            print(joints_cam)
-            input("? ")
+                joint_world = skel[0:3]
+                joints_cam = (np.dot(cam['R'], joint_world) + cam['t']).T
+                print(joints_cam)
+                input("? ")
             hd_idx += 1
 
 def process(sequences):
