@@ -61,6 +61,16 @@ def get_camera_info(calibration_file):
 
     return cameras
 
+def get_bbox(uv, frame_shape):
+    x = min(uv[:, 0]) - 10
+    y = min(uv[:, 1]) - 10
+
+    x_max = min(max(uv[:, 0]) + 10, frame_shape[1])
+    y_max = min(max(uv[:, 1]) + 10, frame_shape[0])
+
+    return [
+        float(max(0, x)), float(max(0, y)), float(x_max - x), float(y_max - y)
+    ]
 
 def process_helper(sequence):
     seq_name = sequence
