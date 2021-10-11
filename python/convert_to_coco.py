@@ -94,7 +94,8 @@ def process(sequences, max_frames, machine_num):
             'name': 'person'
         }]
     }
-
+    
+    num_sequences_finished = 0
     for sequence in sequences:
         seq_name = sequence
         data_path = args.dataset_path
@@ -102,8 +103,9 @@ def process(sequences, max_frames, machine_num):
         cameras = get_camera_info(os.path.join(data_path, seq_name, f"calibration_{seq_name}.json"))
         print(f"Starting to process {sequence} on machine {machine_num}")
         flag = True
+        frame_idx = 0
         for cam_num in range(NUM_VIEWS):
-            hd_vid_name = f"hd_00_{i:02d}.mp4"
+            hd_vid_name = f"hd_00_{cam_num:02d}.mp4"
             hd_vid_path = os.path.join(data_path, seq_name, "hdVideos", hd_vid_name)
             if (not os.path.exists(hd_vid_path)):
                 print(f"Path {hd_vid_path} does not exist")
@@ -117,21 +119,23 @@ def process(sequences, max_frames, machine_num):
             total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             while True:
                 ret, frame = cap.read()
-                frame = cv2.resize(frame, (640, 360))
                 if (not ret):
                     break
+                frame = cv2.resize(frame, (640, 360))
      
                 skel_json_fname = hd_skel_json_path+'body3DScene_{0:08d}.json'.format(hd_idx)
                 if (not os.path.exists(skel_json_fname)):
                     skel_json_fname = hd_skel_json_path+'/hd/body3DScene_{0:08d}.json'.format(hd_idx)
                 
                 if (not os.path.exists(skel_json_fname)):
+                    frame_idx += 1
                     hd_idx += 1
                     continue
                 with open(skel_json_fname) as dfile:
                     bframe = json.load(dfile)
 
                 if (len(bframe["bodies"]) == 0):
+                    frame_idx += 1
                     hd_idx += 1
                     continue
 
@@ -170,10 +174,11 @@ def process(sequences, max_frames, machine_num):
                     annotation_idx += 1
 
                 if (len(detected_groundtruth) > 0):
+                    view_folder = f"view_{cam_num:02d}" 
                     output_dir = os.path.join(
                         args.output_path,
                         seq_name,
-                        f"view_{i:02d}"
+                        view_folder
                     )
                     output_filename = f"{hd_idx:08d}.jpg"
                     os.makedirs(output_dir, exist_ok=True)
@@ -183,27 +188,24 @@ def process(sequences, max_frames, machine_num):
                         "id": image_idx,
                         "width": frame.shape[1],
                         "height": frame.shape[0],
-                        "file_name": os.path.join(seq_name, f"view_{i:02d}", output_filename),
+                        "file_name": os.path.join(seq_name, view_folder, output_filename),
                         "camera_param": {
                             "focal": [float(K[0, 0]), float(K[1, 1])],
                             "princpt": [float(K[0, 2]), float(K[1, 2])]
                         }
                     })
-                if (image_idx % 1000 == 0):
+                if (frame_idx % 1000 == 0):
                     print(f"Finished {frame_idx} of {total * 10} frames on machine {machine_num}")
+                frame_idx += 1
                 image_idx += 1
                 hd_idx += 1
-                if (image_idx >= 10):
-                    flag = True
-                    break
 
-            if (flag): break
-
+        num_sequences_finished += 1
+        print(f"Finished {num_sequences_finished} of {len(sequences)} sequences on machine {machine_num}")
     f = open(f"panoptic_training_{machine_num}.json", "w")
     json.dump(output, f)
     f.close()
 
-    print(f"Finished {i} of {len(sequences)} sequences on machine {machine_num}")
         
 
 def get_max_frames(sequences):
@@ -218,7 +220,7 @@ def get_max_frames(sequences):
         if (total >= max_num):
             max_num = total
 
-    return total
+    return max_num
 
 if __name__ == "__main__":
     f = open(os.path.join(args.dataset_path, 'sequences'), 'r')
@@ -226,10 +228,10 @@ if __name__ == "__main__":
     f.close()
     processes = []
     max_frames = NUM_VIEWS * get_max_frames(sequences)
-    print(f"Max frames: {max_frames}")
+    print(max_frames)
     partitioned_list = partition(sequences, NUM_CPUS)
-    for i in range(NUM_CPUS):
-        p = Process(target=process, args=(partitioned_list[i], max_frames, i))
+    for cpu in range(NUM_CPUS):
+        p = Process(target=process, args=(partitioned_list[cpu], max_frames, cpu))
         p.start()
         processes.append(p)
         
