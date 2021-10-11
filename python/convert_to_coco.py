@@ -10,6 +10,8 @@ import panutils
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset_path', type=str, default='/home/ubuntu/RawDatasets/panoptic/',
                     help='path to the ANU IKEA assembly video dataset')
+parser.add_argument('--output_path', type=str, default='/home/ubuntu/RawDatasets/panoptic_processed/',
+                    help='path to the ANU IKEA assembly video dataset')
 
 args = parser.parse_args()
 
@@ -89,6 +91,7 @@ def process_helper(sequence):
     }
     image_idx = 0
     annotation_idx = 0
+
     for i in range(10):
         hd_vid_name = f"hd_00_{i:02d}.mp4"
         hd_vid_path = os.path.join(data_path, seq_name, "hdVideos", hd_vid_name)
@@ -101,6 +104,8 @@ def process_helper(sequence):
         
         cam = cameras[(0, i)]       
         hd_idx = 0
+        frame_idx = 0
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         while True:
             ret, frame = cap.read()
             if (not ret):
@@ -142,7 +147,6 @@ def process_helper(sequence):
                 joints_img_new = panutils.projectPoints(joints_cam_new.T,
                       cam['K'], np.eye(3), np.zeros((3, 1)),
                       cam['distCoef']).T
-                print(joints_img_new.shape)
                 detected_groundtruth.append({
                     "id": annotation_idx,
                     "image_id": image_idx,
@@ -156,20 +160,28 @@ def process_helper(sequence):
                 annotation_idx += 1
 
             if (len(detected_groundtruth) > 0):
-                cv2.imwrite(f"{image_idx}.jpg", frame)
-                input("? ")
+                output_dir = os.path.join(
+                    args.output_path,
+                    seq_name,
+                    f"view_{i:02d}"
+                )
+                os.makedirs(output_dir, exist_ok=True)
+                cv2.imwrite(f"{output_dir}/{frame_idx}.jpg", frame)
                 K = cam['K']
                 output["images"].append({
                     "id": image_idx,
                     "width": frame.shape[1],
                     "height": frame.shape[0],
-                    "file_name": "TODO EMPTY",
+                    "file_name": os.path.join(seq_name, f"view_{i:02d}", {frame_idx}.jpg)
                     "camera_param": {
                         "focal": [float(K[0, 0]), float(K[1, 1])],
                         "princpt": [float(K[0, 2]), float(K[1, 2])]
                     }
                 })
 
+            if (frame_idx % 100 == 0):
+                print(f"Finished {frame_idx} of {total * 10}")
+            frame_idx += 1
             image_idx += 1
             hd_idx += 1
 
