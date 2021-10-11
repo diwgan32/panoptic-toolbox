@@ -108,6 +108,7 @@ def process_helper(sequence, machine_num):
         total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         while True:
             ret, frame = cap.read()
+            frame = cv2.resize(frame, (640, 360))
             if (not ret):
                 break
  
@@ -133,7 +134,7 @@ def process_helper(sequence, machine_num):
                 joints_img = panutils.projectPoints(joints_cam.T,
                       cam['K'], np.eye(3), np.zeros((3, 19)), 
                       cam['distCoef']).T
-                
+                joints_img *= (1.0/3.0) 
                 valid = np.logical_and(valid, np.logical_not(np.logical_or(joints_img[:, 0] > frame.shape[1], joints_img[:, 1] > frame.shape[0])))
                 joints_img = (joints_img.T * valid).T
                 
@@ -141,11 +142,10 @@ def process_helper(sequence, machine_num):
                     continue
                 
                 # Resizing 1920p to 640p
-                joints_img *= (1.0/3.0)
                 joints_cam_new = reproject_to_3d(joints_img, cam["K"], joints_cam[:, 2])
                 joints_img_new = panutils.projectPoints(joints_cam_new.T,
                       cam['K'], np.eye(3), np.zeros((3, 1)),
-                      cam['distCoef']).T
+                      np.zeros(5)).T
                 detected_groundtruth.append({
                     "id": annotation_idx,
                     "image_id": image_idx,
@@ -154,8 +154,7 @@ def process_helper(sequence, machine_num):
                     "joint_cam": joints_cam.tolist(),
                     "bbox": get_bbox(joints_img, frame.shape) # x, y, w, h
                 })
-                frame = vis_keypoints(cv2.resize(frame, (640, 360)), joints_img_new)
-
+                frame = vis_keypoints(frame, joints_img_new)
                 annotation_idx += 1
 
             if (len(detected_groundtruth) > 0):
@@ -186,7 +185,7 @@ def process_helper(sequence, machine_num):
 
 def process(sequences):
     for sequence in sequences:
-        process_helper(sequence)
+        process_helper(sequence, 0)
 
 if __name__ == "__main__":
     f = open(os.path.join(args.dataset_path, 'sequences'), 'r')
