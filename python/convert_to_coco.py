@@ -83,7 +83,7 @@ def get_bbox(uv, frame_shape):
 def process_helper(sequence, machine_num):
     seq_name = sequence
     data_path = args.dataset_path
-    hd_skel_json_path = data_path+seq_name+'/hdPose3d_stage1_coco19/hd/'
+    hd_skel_json_path = data_path+seq_name+'/hdPose3d_stage1_coco19/'
     cameras = get_camera_info(os.path.join(data_path, seq_name, f"calibration_{seq_name}.json"))
 
     output = {
@@ -97,7 +97,8 @@ def process_helper(sequence, machine_num):
     }
     image_idx = 0
     annotation_idx = 0
-
+    print(f"Starting to process {sequence} on machine {machine_num}")
+    flag = True
     for i in range(10):
         hd_vid_name = f"hd_00_{i:02d}.mp4"
         hd_vid_path = os.path.join(data_path, seq_name, "hdVideos", hd_vid_name)
@@ -120,6 +121,9 @@ def process_helper(sequence, machine_num):
  
             skel_json_fname = hd_skel_json_path+'body3DScene_{0:08d}.json'.format(hd_idx)
             if (not os.path.exists(skel_json_fname)):
+                skel_json_fname = hd_skel_json_path+'/hd/body3DScene_{0:08d}.json'.format(hd_idx)
+            
+            if (not os.path.exists(skel_json_fname)):
                 hd_idx += 1
                 continue
             with open(skel_json_fname) as dfile:
@@ -130,6 +134,7 @@ def process_helper(sequence, machine_num):
                 continue
 
             detected_groundtruth = []
+            
             for body in bframe['bodies']:
                 skel = np.array(body['joints19']).reshape((-1,4)).transpose()
 
@@ -143,7 +148,6 @@ def process_helper(sequence, machine_num):
                 joints_img *= (1.0/3.0) 
                 valid = np.logical_and(valid, np.logical_not(np.logical_or(joints_img[:, 0] > frame.shape[1], joints_img[:, 1] > frame.shape[0])))
                 joints_img = (joints_img.T * valid).T
-                
                 if (np.all(joints_img == np.zeros((19, 3)))):
                     continue
                 
@@ -160,7 +164,7 @@ def process_helper(sequence, machine_num):
                     "joint_cam": joints_cam.tolist(),
                     "bbox": get_bbox(joints_img, frame.shape) # x, y, w, h
                 })
-                frame = vis_keypoints(frame, joints_img_new)
+#               frame = vis_keypoints(frame, joints_img_new)
                 annotation_idx += 1
 
             if (len(detected_groundtruth) > 0):
@@ -182,12 +186,20 @@ def process_helper(sequence, machine_num):
                         "princpt": [float(K[0, 2]), float(K[1, 2])]
                     }
                 })
-
-            if (frame_idx % 1000 == 0):
+            if (image_idx % 1000 == 0):
                 print(f"Finished {frame_idx} of {total * 10} frames on machine {machine_num}")
             frame_idx += 1
             image_idx += 1
             hd_idx += 1
+            if (image_idx >= 10):
+                flag = True
+                break
+
+        if (flag): break
+
+    f = open(f"panoptic_training_{machine_num}.json", "w")
+    json.dump(output, f)
+    f.close()
 
 def process(sequences, machine_num):
     i = 0
@@ -200,10 +212,12 @@ if __name__ == "__main__":
     f = open(os.path.join(args.dataset_path, 'sequences'), 'r')
     sequences = [x.strip() for x in f.readlines()]
     f.close()
-
     processes = []
-    partitioned_list = partition(sequences)
+    partitioned_list = partition(sequences, NUM_CPUS)
     for i in range(NUM_CPUS):
-        processes.append(Process(target=process, args=(partitioned_list,i)))
+        p = Process(target=process, args=(partitioned_list[i],i))
+        p.start()
+        processes.append(p)
+        
     for p in processes:
         p.join()
