@@ -26,7 +26,7 @@ def vis_keypoints(frame, joints2d):
     for i in range(joints2d.shape[0]):
         if (np.isnan(joints2d[i][0]) or np.isnan(joints2d[i][1])):
             continue
-        frame = cv2.circle(frame, (int(joints2d[i][0]), int(joints2d[i][1])), 5, (0, 0, 0), 2)
+        frame = cv2.circle(frame, (int(joints2d[i][0]), int(joints2d[i][1])), 3, (0, 0, 0), 1)
 
     return frame
 
@@ -139,10 +139,10 @@ def process_helper(sequence):
                 # Resizing 1920p to 640p
                 joints_img *= (1.0/3.0)
                 joints_cam_new = reproject_to_3d(joints_img, cam["K"], joints_cam[:, 2])
-                print(joints_cam)
-                print(joints_cam_new)
-                print("------")
-
+                joints_img_new = panutils.projectPoints(joints_cam_new.T,
+                      cam['K'], np.eye(3), np.zeros((3, 1)),
+                      cam['distCoef']).T
+                print(joints_img_new.shape)
                 detected_groundtruth.append({
                     "id": annotation_idx,
                     "image_id": image_idx,
@@ -151,21 +151,22 @@ def process_helper(sequence):
                     "joint_cam": joints_cam.tolist(),
                     "bbox": get_bbox(joints_img, frame.shape) # x, y, w, h
                 })
-                frame = vis_keypoints(cv2.resize(frame, (640, 480), joints_img))
+                frame = vis_keypoints(cv2.resize(frame, (640, 360)), joints_img_new)
 
                 annotation_idx += 1
 
             if (len(detected_groundtruth) > 0):
-                cv2.imwrite(f"{random.randint(1, 1000)}.jpg", frame)
+                cv2.imwrite(f"{image_idx}.jpg", frame)
                 input("? ")
+                K = cam['K']
                 output["images"].append({
                     "id": image_idx,
                     "width": frame.shape[1],
                     "height": frame.shape[0],
-                    "file_name": os.path.join(assembly, label, cam,  "images", basename.split(".")[0]+".jpg"),
+                    "file_name": "TODO EMPTY",
                     "camera_param": {
-                        "focal": [float(cam['K'][0][0]), float(cam['K'][1][1])],
-                        "princpt": [float(cam['K'][0][2]), float(cam['K'][1][2])]
+                        "focal": [float(K[0, 0]), float(K[1, 1])],
+                        "princpt": [float(K[0, 2]), float(K[1, 2])]
                     }
                 })
 
