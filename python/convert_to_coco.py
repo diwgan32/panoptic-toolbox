@@ -6,6 +6,7 @@ import argparse
 import os
 import random
 import panutils
+from multiprocessing import Process
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset_path', type=str, default='/home/ubuntu/RawDatasets/panoptic/',
@@ -14,6 +15,11 @@ parser.add_argument('--output_path', type=str, default='/home/ubuntu/RawDatasets
                     help='path to the ANU IKEA assembly video dataset')
 
 args = parser.parse_args()
+NUM_CPUS = 32
+
+def partition (list_in, n):
+    random.shuffle(list_in)
+    return [list_in[i::n] for i in range(n)]
 
 def reproject_to_3d(im_coords, K, z):
     im_coords = np.stack([im_coords[:,0], im_coords[:,1]],axis=1)
@@ -178,17 +184,26 @@ def process_helper(sequence, machine_num):
                 })
 
             if (frame_idx % 1000 == 0):
-                print(f"Finished {frame_idx} of {total * 10} on machine {machine_num}")
+                print(f"Finished {frame_idx} of {total * 10} frames on machine {machine_num}")
             frame_idx += 1
             image_idx += 1
             hd_idx += 1
 
-def process(sequences):
+def process(sequences, machine_num):
+    i = 0
     for sequence in sequences:
-        process_helper(sequence, 0)
+        process_helper(sequence, machine_num)
+        print(f"Finished {i} of {len(sequences)} sequences on machine {machine_num}")
+        i += 1
 
 if __name__ == "__main__":
     f = open(os.path.join(args.dataset_path, 'sequences'), 'r')
     sequences = [x.strip() for x in f.readlines()]
     f.close()
-    process(sequences)
+
+    processes = []
+    partitioned_list = partition(sequences)
+    for i in range(NUM_CPUS):
+        processes.append(Process(target=process, args=(partitioned_list,i)))
+    for p in processes:
+        p.join()
