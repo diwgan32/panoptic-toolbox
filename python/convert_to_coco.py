@@ -74,7 +74,7 @@ def get_bbox(uv, frame_shape):
         float(max(0, x)), float(max(0, y)), float(x_max - x), float(y_max - y)
     ]
 
-def process_helper(sequence):
+def process_helper(sequence, machine_num):
     seq_name = sequence
     data_path = args.dataset_path
     hd_skel_json_path = data_path+seq_name+'/hdPose3d_stage1_coco19/hd/'
@@ -138,7 +138,6 @@ def process_helper(sequence):
                 joints_img = (joints_img.T * valid).T
                 
                 if (np.all(joints_img == np.zeros((19, 3)))):
-                    print("Person out of frame")
                     continue
                 
                 # Resizing 1920p to 640p
@@ -172,15 +171,15 @@ def process_helper(sequence):
                     "id": image_idx,
                     "width": frame.shape[1],
                     "height": frame.shape[0],
-                    "file_name": os.path.join(seq_name, f"view_{i:02d}", {frame_idx}.jpg)
+                    "file_name": os.path.join(seq_name, f"view_{i:02d}", f"{frame_idx}.jpg"),
                     "camera_param": {
                         "focal": [float(K[0, 0]), float(K[1, 1])],
                         "princpt": [float(K[0, 2]), float(K[1, 2])]
                     }
                 })
 
-            if (frame_idx % 100 == 0):
-                print(f"Finished {frame_idx} of {total * 10}")
+            if (frame_idx % 1000 == 0):
+                print(f"Finished {frame_idx} of {total * 10} on machine {machine_num}")
             frame_idx += 1
             image_idx += 1
             hd_idx += 1
