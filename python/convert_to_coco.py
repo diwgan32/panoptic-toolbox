@@ -102,7 +102,7 @@ def process(sequences, max_frames, machine_num):
         hd_skel_json_path = data_path+seq_name+'/hdPose3d_stage1_coco19/'
         cameras = get_camera_info(os.path.join(data_path, seq_name, f"calibration_{seq_name}.json"))
         print(f"Starting to process {sequence} on machine {machine_num}")
-        flag = True
+        flag = False
         frame_idx = 0
         for cam_num in range(NUM_VIEWS):
             hd_vid_name = f"hd_00_{cam_num:02d}.mp4"
@@ -167,7 +167,7 @@ def process(sequences, max_frames, machine_num):
                         "image_id": image_idx,
                         "category_id": 1,
                         "is_crowd": 0,
-                        "joint_cam": joints_cam.tolist(),
+                        "joint_cam": joints_cam_new.tolist(),
                         "bbox": get_bbox(joints_img, frame.shape) # x, y, w, h
                     })
     #               frame = vis_keypoints(frame, joints_img_new)
@@ -182,8 +182,9 @@ def process(sequences, max_frames, machine_num):
                     )
                     output_filename = f"{hd_idx:08d}.jpg"
                     os.makedirs(output_dir, exist_ok=True)
-                    cv2.imwrite(f"{output_dir}/{output_filename}", frame)
+#                    cv2.imwrite(f"{output_dir}/{output_filename}", frame)
                     K = cam['K']
+                    output["annotations"] += detected_groundtruth
                     output["images"].append({
                         "id": image_idx,
                         "width": frame.shape[1],
@@ -199,9 +200,18 @@ def process(sequences, max_frames, machine_num):
                 frame_idx += 1
                 image_idx += 1
                 hd_idx += 1
+                if (hd_idx > 200):
+                    flag = True
+                    print("breaking 1")
+                    break
+            print("breaking 2")
 
+            break
+        print("breaking 3")
+        break
         num_sequences_finished += 1
         print(f"Finished {num_sequences_finished} of {len(sequences)} sequences on machine {machine_num}")
+    print("writing") 
     f = open(f"panoptic_training_{machine_num}.json", "w")
     json.dump(output, f)
     f.close()
